@@ -474,6 +474,10 @@ def pod_agent(
     agent_end_time = time.time()
     state["agent_timings"]["Pod"] = agent_end_time - agent_start_time
 
+    disable_github_agent = os.getenv("DISABLE_GITHUB_AGENT", "")
+    if len(disable_github_agent) > 0:
+        state["workflow_complete"] = True
+
     completion_msg = "✅ Pod Agent finished"
     state["status_history"].append(completion_msg)
     state["status_message"] = completion_msg
@@ -551,6 +555,10 @@ def perf_agent(
 
     agent_end_time = time.time()
     state["agent_timings"]["Performance"] = agent_end_time - agent_start_time
+
+    disable_github_agent = os.getenv("DISABLE_GITHUB_AGENT", "")
+    if len(disable_github_agent) > 0:
+        state["workflow_complete"] = True
 
     completion_msg = "✅ Performance Agent finished"
     state["status_history"].append(completion_msg)

@@ -797,9 +797,14 @@ def display_sidebar_conversations() -> "None":
 
     st.divider()
 
+    disable_github_agent = os.getenv("DISABLE_GITHUB_AGENT", "")
+
     with st.expander("🤖 Agent Reference", expanded=False):
         st.markdown("**Available Agents:**")
         for agent, icon in AGENT_ICONS.items():
+            if len(disable_github_agent) > 0 and agent == "Git":
+                continue
+
             st.markdown(f"{icon} **{agent}**")
         st.markdown(
             """

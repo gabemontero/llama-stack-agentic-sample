@@ -461,7 +461,9 @@ class Workflow:
         overall_workflow.add_node("support_agent", support_agent)
         overall_workflow.add_node("pod_agent", pod_agent_node)
         overall_workflow.add_node("perf_agent", perf_agent_node)
+
         overall_workflow.add_node("git_agent", git_agent_node)
+
         overall_workflow.add_node(
             "support_classification_agent", support_classification_node
         )
@@ -473,8 +475,17 @@ class Workflow:
         overall_workflow.add_conditional_edges(
             "support_classification_agent", support_route_to_next_node
         )
-        overall_workflow.add_edge("pod_agent", "git_agent")
-        overall_workflow.add_edge("perf_agent", "git_agent")
+
+        # given how slow github MCP tool calls can go, for live demo purposes,
+        # we add env var
+        # backdoor to disable its use ... we still have to add the node above
+        # otherwise the workflow
+        # compilation validation fails
+        disable_github_agent = os.getenv("DISABLE_GITHUB_AGENT", "")
+        if len(disable_github_agent) == 0:
+            overall_workflow.add_edge("pod_agent", "git_agent")
+            overall_workflow.add_edge("perf_agent", "git_agent")
+
         workflow = overall_workflow.compile()
 
         return workflow
