@@ -177,17 +177,6 @@ def sample_pdf_file(temp_dir):
 
 
 @pytest.fixture
-def mock_document_converter():
-    converter = Mock()
-    mock_result = Mock()
-    mock_document = Mock()
-    mock_document.export_to_markdown.return_value = "Test markdown content"
-    mock_result.document = mock_document
-    converter.convert.return_value = mock_result
-    return converter
-
-
-@pytest.fixture
 def mock_llama_stack_availability():
     """
     fixture that patches check_llama_stack_availability to return connected status.

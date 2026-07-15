@@ -2,6 +2,7 @@ import json
 import os
 from typing import Any
 
+import httpx
 from llama_stack_client import LlamaStackClient
 from llama_stack_client.types import ResponseObject
 from llama_stack_client.types.response_list_response import (
@@ -13,6 +14,7 @@ from src.constants import (
     DEFAULT_INGESTION_CONFIG_PATHS,
     DEFAULT_LLAMA_STACK_URL,
     DEFAULT_RAG_METADATA_FILE_PATHS,
+    LLAMA_STACK_TLS_VERIFY,
     PIPELINE_CATEGORIES,
 )
 from src.exceptions import NoVectorStoresFoundError
@@ -285,7 +287,10 @@ class RAGService:
         initializes the Llama Stack client and load vector stores.
         """
         try:
-            self.client = LlamaStackClient(base_url=self.llama_stack_url)
+            self.client = LlamaStackClient(
+                base_url=self.llama_stack_url,
+                http_client=httpx.Client(verify=LLAMA_STACK_TLS_VERIFY),
+            )
             self.client.models.list()
             logger.info("RAG Service: Llama Stack client initialized successfully")
 
@@ -294,7 +299,8 @@ class RAGService:
             openai_base_url = f"{self.llama_stack_url}/v1"
             self.openai_client = OpenAI(
                 base_url=openai_base_url,
-                api_key="not-needed",  # LlamaStack doesn't require API key
+                api_key="not-needed",
+                http_client=httpx.Client(verify=LLAMA_STACK_TLS_VERIFY),
             )
             logger.info(
                 f"RAG Service: OpenAI client initialized (base_url={openai_base_url})"

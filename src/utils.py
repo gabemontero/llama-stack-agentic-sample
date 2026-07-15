@@ -4,10 +4,12 @@ import os
 import threading
 from typing import Any
 
+import httpx
 from llama_stack_client import LlamaStackClient
 from llama_stack_client.types import ResponseObject
 from typing_extensions import Literal
 
+from src.constants import LLAMA_STACK_TLS_VERIFY
 from src.types import WorkflowState
 
 log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -207,7 +209,10 @@ def check_llama_stack_availability(
     }
 
     try:
-        client = LlamaStackClient(base_url=base_url)
+        client = LlamaStackClient(
+            base_url=base_url,
+            http_client=httpx.Client(verify=LLAMA_STACK_TLS_VERIFY),
+        )
         models_response = client.models.list()
         result["connected"] = True
 

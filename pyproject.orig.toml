@@ -5,7 +5,6 @@ description = "Llama-Stack LangGraph Customer Service Example"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "docling>=2.63.0",
     "llama-stack-client>=0.3.1",
     "llama-stack>=0.3.1",
     "pygithub>=2.8.1",

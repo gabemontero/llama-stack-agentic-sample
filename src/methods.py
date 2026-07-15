@@ -3,7 +3,7 @@ import time
 from typing import Any, cast
 
 from llama_stack_client.types import ResponseObject
-from openai import OpenAI
+from openai import NotFoundError, OpenAI
 from openai.types.chat import ChatCompletionUserMessageParam
 
 from src.constants import DEFAULT_MCP_SERVER_URL
@@ -49,38 +49,42 @@ def classification_agent(
             "topic_llm is required in classification agent"
         )
 
-    if guardrail_model is None:
-        raise AgentRunMethodParameterError(
-            "guardrail_model is required in classification agent"
-        )
+    if guardrail_model:
+        # checking if the input is safe
+        try:
+            safety_response = openai_client.moderations.create(
+                model=guardrail_model, input=str(state["input"])
+            )
 
-    # checking if the input is safe
-    safety_response = openai_client.moderations.create(
-        model=guardrail_model, input=str(state["input"])
-    )
+            for moderation in safety_response.results:
+                if not moderation.flagged:
+                    continue
 
-    for moderation in safety_response.results:
-        if not moderation.flagged:
-            continue
-
-        logger.info(
-            f"Classification result: '{state['input']}' is flagged as '{moderation}'"
-        )
-        state["decision"] = "unsafe"
-        state["data"] = state["input"]
-        model_extra = moderation.categories.model_extra
-        flagged_categories = [
-            key
-            for key, value in (model_extra.items() if model_extra else [])
-            if value is True
-        ]
-        categories_str = ", ".join(flagged_categories)
-        state["classification_message"] = (
-            f"Classification result: '{state['input']}' "
-            f"is flagged for: {categories_str}"
-        )
-        state["workflow_complete"] = True
-        return state
+                logger.info(f"Classification result: '{state['input']}' is flagged")
+                state["decision"] = "unsafe"
+                state["data"] = state["input"]
+                model_extra = moderation.categories.model_extra
+                flagged_categories = [
+                    key
+                    for key, value in (model_extra.items() if model_extra else [])
+                    if value is True
+                ]
+                categories_str = ", ".join(flagged_categories)
+                state["classification_message"] = (
+                    f"Classification result: '{state['input']}' "
+                    f"is flagged for: {categories_str}"
+                )
+                state["workflow_complete"] = True
+                return state
+        except NotFoundError:
+            logger.warning(
+                "Moderations endpoint not available on this Llama Stack server, "
+                "skipping guardrails"
+            )
+        except Exception as e:
+            logger.warning(f"Guardrail check failed, skipping: {e}")
+    else:
+        logger.info("Guardrail model not configured, skipping safety check")
 
     # Use OpenAI client for structured output with Pydantic models
     try:

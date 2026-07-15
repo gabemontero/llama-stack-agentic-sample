@@ -16,6 +16,7 @@ from src.constants import (
     DEFAULT_INGESTION_CONFIG,
     DEFAULT_LLAMA_STACK_URL,
     DEFAULT_MCP_TOOL_MODEL,
+    LLAMA_STACK_TLS_VERIFY,
 )
 from src.exceptions import NoVectorStoresFoundError
 from src.ingest import IngestionService
@@ -216,7 +217,10 @@ def count_vector_stores() -> "int":
     count the number of vector stores in the database
     """
     try:
-        client = LlamaStackClient(base_url=LLAMA_STACK_URL)
+        client = LlamaStackClient(
+            base_url=LLAMA_STACK_URL,
+            http_client=httpx.Client(verify=LLAMA_STACK_TLS_VERIFY),
+        )
         vector_stores = client.vector_stores.list() or []
         vector_store_list = list(vector_stores)
         count = len(vector_store_list)
@@ -249,7 +253,9 @@ def check_llama_stack_health() -> "dict[str, Any]":
     """
     status = get_llama_stack_status()
 
-    required_models = [INFERENCE_MODEL, GUARDRAIL_MODEL, MCP_TOOL_MODEL]
+    required_models = [
+        m for m in [INFERENCE_MODEL, GUARDRAIL_MODEL, MCP_TOOL_MODEL] if m
+    ]
     result = check_llama_stack_availability(LLAMA_STACK_URL, required_models)
 
     status["connected"] = result["connected"]
@@ -313,7 +319,10 @@ async def check_and_run_ingestion_if_needed() -> "None":
         # check if vector stores for all pipelines exist
         ingestion_service = get_ingestion_service()
         pipelines = ingestion_service.pipelines
-        temp_client = LlamaStackClient(base_url=LLAMA_STACK_URL)
+        temp_client = LlamaStackClient(
+            base_url=LLAMA_STACK_URL,
+            http_client=httpx.Client(verify=LLAMA_STACK_TLS_VERIFY),
+        )
         temp_rag_service = RAGService(
             pipelines=pipelines, llama_stack_url=LLAMA_STACK_URL
         )
@@ -359,7 +368,9 @@ async def run_ingestion_pipeline() -> "None":
 
         # verify llama-stack server is reachable before ingestion
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(
+                timeout=5.0, verify=LLAMA_STACK_TLS_VERIFY
+            ) as client:
                 response = await client.get(f"{LLAMA_STACK_URL}/v1/health")
                 if response.status_code != 200:
                     raise Exception(

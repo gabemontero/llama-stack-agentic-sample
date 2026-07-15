@@ -1,6 +1,8 @@
+import os
+
 # DEFAULT_EMBEDDING_DIMENSION: The default dimension
 # size for vector embeddings.
-DEFAULT_EMBEDDING_DIMENSION = 128
+DEFAULT_EMBEDDING_DIMENSION = 1536
 
 # DEFAULT_CHUNK_SIZE_IN_TOKENS: The default size of text
 # chunks in tokens for processing.
@@ -8,7 +10,9 @@ DEFAULT_CHUNK_SIZE_IN_TOKENS = 512
 
 # DEFAULT_LLAMA_STACK_URL: The default URL for
 # connecting to the Llama Stack service.
-DEFAULT_LLAMA_STACK_URL = "http://localhost:8321"
+DEFAULT_LLAMA_STACK_URL = (
+    "https://llamastack-llamastack.apps.gmontero420.rhdh-pai.devfile-ci.com"
+)
 
 # DEFAULT_LLAMA_STACK_WAITING_RETRIES: The default number
 # of retries for waiting operations in Llama Stack.
@@ -24,15 +28,16 @@ DEFAULT_HTTP_REQUEST_TIMEOUT = 60
 
 # DEFAULT_INFERENCE_MODEL: The default inference model
 # used by the RAGService.
-DEFAULT_INFERENCE_MODEL = "vllm/redhataiqwen3-8b-fp8-dynamic"
+DEFAULT_INFERENCE_MODEL = "vllm-inference/gpt-4.1"
 
 # DEFAULT_GUARDRAIL_MODEL: The default guardrail model
-# used for response validation.
-DEFAULT_GUARDRAIL_MODEL = "ollama/llama-guard3:8b"
+# used for response validation. Set to empty string to
+# disable guardrails.
+DEFAULT_GUARDRAIL_MODEL = ""
 
 # DEFAULT_EMBEDDING_MODEL: The default embedding model
 # used for generating vector embeddings.
-DEFAULT_EMBEDDING_MODEL = "ollama/all-minilm:l6-v2"
+DEFAULT_EMBEDDING_MODEL = "openai/text-embedding-3-small"
 
 # DEFAULT_INGESTION_MODE: The default mode for document ingestion.
 # "sync" = sequential (slower but more stable, won't overwhelm embedding model)
@@ -41,7 +46,7 @@ DEFAULT_INGESTION_MODE = "sync"
 
 # DEFAULT_MCP_TOOL_MODEL: The default model used for
 # MCP tool calls.
-DEFAULT_MCP_TOOL_MODEL = "vllm/redhataiqwen3-8b-fp8-dynamic"
+DEFAULT_MCP_TOOL_MODEL = "vllm-inference/gpt-4.1"
 
 # DEFAULT_MCP_SERVER_URL: The default URL for the MCP
 # (Model Context Protocol) server for Kubernetes tools.
@@ -64,6 +69,12 @@ DEFAULT_RAG_METADATA_FILE_PATHS = [
     "rag_file_metadata.json",
     "/config/rag_file_metadata.json",
 ]
+
+# Set LLAMA_STACK_TLS_VERIFY=false for self-signed certs
+# (e.g. OpenShift routes).
+LLAMA_STACK_TLS_VERIFY = (
+    os.environ.get("LLAMA_STACK_TLS_VERIFY", "false").lower() != "false"
+)
 
 # PIPELINE_CATEGORIES: The list of pipeline categories
 PIPELINE_CATEGORIES = ["legal", "techsupport", "hr", "sales", "procurement"]

@@ -358,25 +358,18 @@ class TestProcessDocuments:
         mock_file_response.id = "test-file-id"
         service.client.files.create = Mock(return_value=mock_file_response)
 
-        with patch.object(service, "converter") as mock_converter:
-            mock_result = Mock()
-            mock_document = Mock()
-            mock_document.export_to_markdown.return_value = "Test content"
-            mock_result.document = mock_document
-            mock_converter.convert.return_value = mock_result
+        documents = await service.process_documents(
+            [sample_pdf_file],
+            github_base_url="https://github.com/test/repo/blob/main/docs",
+            category="legal",
+        )
 
-            documents = await service.process_documents(
-                [sample_pdf_file],
-                github_base_url="https://github.com/test/repo/blob/main/docs",
-                category="legal",
-            )
-
-            assert len(documents) == 1
-            assert "test-file-id" in service.file_metadata
-            assert (
-                service.file_metadata["test-file-id"]["original_filename"] == "test.pdf"
-            )
-            assert service.file_metadata["test-file-id"]["category"] == "legal"
+        assert len(documents) == 1
+        assert "test-file-id" in service.file_metadata
+        assert (
+            service.file_metadata["test-file-id"]["original_filename"] == "test.pdf"
+        )
+        assert service.file_metadata["test-file-id"]["category"] == "legal"
 
     @pytest.mark.anyio
     async def test_process_documents_with_error(
@@ -385,14 +378,15 @@ class TestProcessDocuments:
         with patch("src.ingest.LlamaStackClient", return_value=mock_llama_stack_client):
             service = IngestionService(sample_config_file)
 
-        with patch.object(
-            service, "converter", side_effect=Exception("Conversion error")
-        ):
-            documents = await service.process_documents(
-                [sample_pdf_file], github_base_url="", category="legal"
-            )
+        service.client.files.create = Mock(
+            side_effect=Exception("Upload error")
+        )
 
-            assert documents == []
+        documents = await service.process_documents(
+            [sample_pdf_file], github_base_url="", category="legal"
+        )
+
+        assert documents == []
 
 
 class TestCreateVectorDb:

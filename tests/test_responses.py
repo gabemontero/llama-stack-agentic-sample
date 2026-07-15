@@ -17,7 +17,9 @@ class TestRAGServiceInit:
         pipelines = []
         service = RAGService(pipelines=pipelines)
 
-        assert service.llama_stack_url == "http://localhost:8321"
+        from src.constants import DEFAULT_LLAMA_STACK_URL
+
+        assert service.llama_stack_url == DEFAULT_LLAMA_STACK_URL
         assert service.client is None
         assert service.vector_store_map == {}
         assert service.all_vector_store_ids == []

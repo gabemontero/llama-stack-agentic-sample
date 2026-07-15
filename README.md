@@ -55,6 +55,17 @@ In our testing, the following models achieved tolerable performance for both `IN
 
 Visit the [run.yaml file](./run.yaml) for the environment variables leveraged with starting up those Llama Stack providers.
 
+#### Connecting to a remote Llama Stack server
+
+To point the application at a remote Llama Stack server (e.g. deployed on OpenShift via the OGX operator),
+set the following environment variables:
+
+- `LLAMA_STACK_URL` - the URL of the remote Llama Stack server
+- `LLAMA_STACK_TLS_VERIFY` - set to `false` to skip TLS certificate verification (e.g. for self-signed certs on OpenShift routes)
+- `GUARDRAIL_MODEL` - set to empty string (`""`) to disable guardrails if the remote server does not support the `/v1/moderations` endpoint
+- `EMBEDDING_MODEL` - override the embedding model used for RAG ingestion (e.g. `openai/text-embedding-3-small`)
+- `EMBEDDING_DIMENSION` - override the embedding dimension to match the model (e.g. `1536` for `text-embedding-3-small`)
+
 ### Update your Llama Stack config to access your existing models
 
 ### Setup your Virtual Environment

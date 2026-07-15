@@ -7,12 +7,9 @@ import time
 from pathlib import Path
 from typing import Any, cast
 
+import httpx
 import requests
 import yaml
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling_core.transforms.chunker.hybrid_chunker import HybridChunker
 from github import Auth, Github
 from github.ContentFile import ContentFile
 from github.Repository import Repository
@@ -27,6 +24,7 @@ from src.constants import (
     DEFAULT_INGESTION_MODE,
     DEFAULT_LLAMA_STACK_RETRY_DELAY,
     DEFAULT_LLAMA_STACK_WAITING_RETRIES,
+    LLAMA_STACK_TLS_VERIFY,
 )
 from src.exceptions import IngestionPipelineError
 from src.types import (
@@ -36,7 +34,7 @@ from src.types import (
     SourceTypes,
     VectorDBConfig,
 )
-from src.utils import check_llama_stack_availability, clean_text, logger
+from src.utils import check_llama_stack_availability, logger
 
 
 class IngestionService:
@@ -64,16 +62,22 @@ class IngestionService:
         self.client = self._initialize_llama_stack_client()
         self.vector_store_ids: "list[str]" = []
 
-        # Vector DB setup
-        _embedding_dimension = (
-            _config["vector_db"].get("embedding_dimension")
-            if _config["vector_db"].get("embedding_dimension")
-            else DEFAULT_EMBEDDING_DIMENSION
+        # Vector DB setup - env vars take precedence over config file
+        _embedding_dimension = int(
+            os.environ.get(
+                "EMBEDDING_DIMENSION",
+                _config["vector_db"].get(
+                    "embedding_dimension", DEFAULT_EMBEDDING_DIMENSION
+                ),
+            )
         )
-        _embedding_model = (
-            _config["vector_db"].get("embedding_model")
-            if _config["vector_db"].get("embedding_model")
-            else DEFAULT_EMBEDDING_MODEL
+        _embedding_model = os.environ.get(
+            "EMBEDDING_MODEL",
+            _config["vector_db"].get("embedding_model", DEFAULT_EMBEDDING_MODEL),
+        )
+        self.vector_db_provider_id = os.environ.get(
+            "VECTOR_DB_PROVIDER_ID",
+            _config["vector_db"].get("provider_id", ""),
         )
         _chunk_size_in_tokens = (
             _config["vector_db"].get("chunk_size_in_tokens")
@@ -102,16 +106,6 @@ class IngestionService:
         self.file_metadata_path = os.environ.get(
             "RAG_FILE_METADATA", "rag_file_metadata.json"
         )
-
-        # Document converter setup
-        pipeline_options = PdfPipelineOptions()
-        pipeline_options.generate_picture_images = True
-        self.converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-            }
-        )
-        self.chunker = HybridChunker()
 
         # GitHub client setup
         gh_token = os.getenv("GITHUB_TOKEN")
@@ -206,7 +200,9 @@ class IngestionService:
             assert "llamastack" in raw_config
             assert "base_url" in raw_config["llamastack"]
             assert "vector_db" in raw_config
-            assert "embedding_model" in raw_config["vector_db"]
+            assert "embedding_model" in raw_config["vector_db"] or os.environ.get(
+                "EMBEDDING_MODEL"
+            )
             assert "pipelines" in raw_config
         except AssertionError as e:
             logger.error(f"Configuration validation error: {e}")
@@ -229,7 +225,10 @@ class IngestionService:
 
             if result["connected"]:
                 logger.debug("Llama Stack Client connected successfully!")
-                return LlamaStackClient(base_url=self.llama_stack_url)
+                return LlamaStackClient(
+                    base_url=self.llama_stack_url,
+                    http_client=httpx.Client(verify=LLAMA_STACK_TLS_VERIFY),
+                )
 
             if attempt < max_retries - 1:
                 logger.info(
@@ -451,68 +450,43 @@ class IngestionService:
         self, file_path: str, github_base_url: str, category: str
     ) -> File | None:
         """
-        processes a single PDF document.
-        Preserves original filename when uploading to Llama Stack for
-        better metadata recovery after pod restarts.
+        Uploads a PDF document to Llama Stack for server-side processing.
+        The server's file_processors provider (e.g. inline::pypdf) handles
+        text extraction and chunking.
         """
         try:
             original_filename = os.path.basename(file_path)
-            logger.info(f"Processing document: {original_filename}")
-            result = self.converter.convert(file_path)
+            logger.info(f"Uploading document: {original_filename}")
 
-            # clean text for special characters
-            markdown_text = result.document.export_to_markdown()
-            cleaned_text = clean_text(markdown_text)
+            file_create_response = self.client.files.create(
+                file=Path(file_path), purpose="assistants"
+            )
 
-            # create temp file with original filename (not random temp name)
-            # this preserves the filename in Llama Stack for metadata recovery
-            temp_dir = tempfile.mkdtemp()
-            # replace .pdf extension with .txt for the processed content
-            processed_filename = original_filename
-            if processed_filename.lower().endswith(".pdf"):
-                processed_filename = processed_filename[:-4] + ".txt"
-            tmp_file_path = os.path.join(temp_dir, processed_filename)
+            file_id = file_create_response.id
+            github_url = (
+                f"{github_base_url}/{original_filename}" if github_base_url else ""
+            )
 
-            try:
-                # create file in llama stack
-                with open(tmp_file_path, "w", encoding="utf-8") as tmp_file:
-                    tmp_file.write(cleaned_text)
-
-                file_create_response = self.client.files.create(
-                    file=Path(tmp_file_path), purpose="assistants"
-                )
-
-                file_id = file_create_response.id
-                github_url = (
-                    f"{github_base_url}/{original_filename}" if github_base_url else ""
-                )
-
-                self.file_metadata[file_id] = {
-                    "original_filename": original_filename,
-                    "github_url": github_url,
-                    "category": category,
-                }
-                logger.info(f"Mapped file_id '{file_id}' -> '{original_filename}'")
-                return file_create_response
-            finally:
-                # clean files
-                if os.path.exists(tmp_file_path):
-                    os.unlink(tmp_file_path)
-                if os.path.exists(temp_dir):
-                    os.rmdir(temp_dir)
+            self.file_metadata[file_id] = {
+                "original_filename": original_filename,
+                "github_url": github_url,
+                "category": category,
+            }
+            logger.info(f"Mapped file_id '{file_id}' -> '{original_filename}'")
+            return file_create_response
 
         except Exception as e:
-            logger.error(f"Error processing {file_path}: {e}")
+            logger.error(f"Error uploading {file_path}: {e}")
             return None
 
     async def process_documents(
         self, pdf_files: "list[str]", github_base_url="", category=""
     ) -> "list[File]":
         """
-        processes PDF files into chunks using docling concurrently.
+        Uploads PDF files to Llama Stack concurrently.
         """
         logger.info(
-            f"Processing {len(pdf_files)} documents with docling concurrently..."
+            f"Uploading {len(pdf_files)} documents to Llama Stack concurrently..."
         )
 
         # process all documents concurrently using thread pool
@@ -601,8 +575,19 @@ class IngestionService:
             # asyncio.to_thread moves the synchronous llama-stack-client
             # call to a separate thread so the asyncio (event) loop keeps
             # running.
+            extra_body: dict[str, Any] = {
+                "embedding_model": self.vector_db_config.embedding_model,
+                "embedding_dimension": str(self.vector_db_config.embedding_dimension),
+            }
+            if self.vector_db_provider_id:
+                extra_body["provider_id"] = self.vector_db_provider_id
+            create_kwargs: dict[str, Any] = {
+                "name": vector_store_name,
+                "extra_body": extra_body,
+            }
             vector_store = await asyncio.to_thread(
-                self.client.vector_stores.create, name=vector_store_name
+                self.client.vector_stores.create,
+                **create_kwargs,
             )
             self.vector_store_ids.append(vector_store.id)
         except Exception as e:

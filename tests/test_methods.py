@@ -70,10 +70,11 @@ class TestClassificationAgent:
     def test_classification_agent_without_guardrail_model(
         self, sample_workflow_state, mock_openai_client
     ):
-        with pytest.raises(AgentRunMethodParameterError):
-            classification_agent(
-                sample_workflow_state, mock_openai_client, "test-model", None
-            )
+        result = classification_agent(
+            sample_workflow_state, mock_openai_client, "test-model", None
+        )
+        assert result is not None
+        assert result["decision"] != "unsafe"
 
     def test_classification_agent_with_exception(
         self, sample_workflow_state, mock_openai_client
