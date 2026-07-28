@@ -69,8 +69,12 @@ source .venv/bin/activate
 ### Run Llama Stack
 
 We have provided a custom run.yaml file to specify the required providers. Use the following command to run the Llama Stack with the custom configuration file.
+The snippet below assumes you are in the top directory of your clone of this repository.
 
 ```
+cd start-local-llamastack
+uv sync
+source .venv/bin/activate
 uv run llama stack run run.yaml
 ```
 
@@ -116,7 +120,12 @@ uv run llama-stack-client configure --endpoint http://localhost:8321 --api-key n
 
 ## Run the application Code
 
+The snippet below for running the application assumes you are in the top directory of your clone of this repository.
+Run this in a different window/shell from where you are running a local llamstack.
+
 ```bash
+uv sync
+source .venv/bin/activate
 uv run streamlit run streamlit_app.py
 ```
 
